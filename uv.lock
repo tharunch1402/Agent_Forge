@@ -27,6 +27,7 @@ dependencies = [
     { name = "pypdf" },
     { name = "pytest" },
     { name = "python-dotenv" },
+    { name = "sqlalchemy" },
 ]
 
 [package.dev-dependencies]
@@ -52,6 +53,7 @@ requires-dist = [
     { name = "pypdf", specifier = ">=7.0.0" },
     { name = "pytest", specifier = ">=9.2.0" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
+    { name = "sqlalchemy", specifier = ">=2.1.8" },
 ]
 
 [package.metadata.requires-dev]
