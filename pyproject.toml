@@ -21,6 +21,7 @@ dependencies = [
     "python-dotenv>=1.2.4",
     "sqlalchemy>=2.1.8",
     "sqlglot>=30.30.0",
+    "streamlit>=1.67.0",
 ]
 
 [build-system]

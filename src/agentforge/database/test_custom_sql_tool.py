@@ -3,10 +3,7 @@ from agentforge.database.custom_sql_tool import execute_sql
 
 def test_custom_sql_tool():
 
-    query = """
-    DELETE FROM employees
-    WHERE department = 'IT'
-    """
+    query = "SELECT invalid_column FROM employees"
 
     result = execute_sql.invoke({
         "query": query

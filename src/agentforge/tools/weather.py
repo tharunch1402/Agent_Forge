@@ -1,22 +1,56 @@
-from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
+
+import requests
 from langchain.tools import tool
 from agentforge.config import settings
-from langchain.messages import HumanMessage, AIMessage, SystemMessage
-import requests
+
 
 @tool
-def get_weather(city:str)-> str:
-    ''' Getting a temperature of a particular city in the world '''
-
+def get_weather(city: str) -> str:
+    """Get current weather information for a city."""
 
     API_KEY = settings.WEATHER_API_KEY
-    url = 'http://api.openweathermap.org/data/2.5/weather'
+
+    url = "https://api.openweathermap.org/data/2.5/weather"
 
     params = {
-        'q':city,
-        'appid':API_KEY,
-        'units':'metric'
-        }
-    temperature = requests.get(url,params = params).json()
-    return f'the temperature of {city} is {temperature}'
+        "q": city,
+        "appid": API_KEY,
+        "units": "metric"
+    }
+
+    try:
+        response = requests.get(
+            url,
+            params=params,
+            timeout=10
+        )
+
+        response.raise_for_status()
+
+        weather_data = response.json()
+
+        temperature = weather_data["main"]["temp"]
+        feels_like = weather_data["main"]["feels_like"]
+        humidity = weather_data["main"]["humidity"]
+        description = weather_data["weather"][0]["description"]
+        wind_speed = weather_data["wind"]["speed"]
+
+        return (
+            f"Weather in {city}:\n"
+            f"Temperature: {temperature}°C\n"
+            f"Feels like: {feels_like}°C\n"
+            f"Humidity: {humidity}%\n"
+            f"Condition: {description}\n"
+            f"Wind speed: {wind_speed} m/s"
+        )
+
+    except requests.exceptions.HTTPError:
+        if response.status_code == 404:
+            return f"City '{city}' was not found."
+        return "Weather API returned an error."
+
+    except requests.exceptions.RequestException:
+        return "Unable to connect to the weather service."
+
+    except (KeyError, IndexError, TypeError):
+        return "Unable to process the weather information."
