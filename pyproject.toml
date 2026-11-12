@@ -3,6 +3,7 @@ name = "agent-forge"
 version = "0.1.0"
 requires-python = "==3.12.*"
 dependencies = [
+    "geopy>=2.5.0",
     "httpx>=0.28.1",
     "langchain>=1.4.9",
     "langchain-classic>=1.0.8",
@@ -14,14 +15,20 @@ dependencies = [
     "langgraph>=1.2.20",
     "pandas>=3.1.1",
     "pdfplumber>=0.11.10",
+    "pint>=0.26.2",
     "pydantic>=2.14.3",
     "pymysql>=1.2.4",
     "pypdf>=7.0.0",
     "pytest>=9.2.0",
     "python-dotenv>=1.2.4",
+    "requests>=2.34.2",
+    "scipy>=1.18.1",
     "sqlalchemy>=2.1.8",
     "sqlglot>=30.30.0",
+    "statsmodels>=0.15.0",
     "streamlit>=1.67.0",
+    "sympy>=1.14.0",
+    "utils>=1.0.2",
 ]
 
 [build-system]
