@@ -1,24 +1,31 @@
-from langchain.tools import tool
-from agentforge.database.query_executor import execute_query
+
 import sqlglot
+from sqlglot import exp
+from langchain.tools import tool
 
-def validate_sql(query:str):
-    parsed_sql = sqlglot.parse(query,read = 'mysql')
+from agentforge.database.query_executor import execute_query
 
-    if len(parsed_sql)!=1:
-        raise ValueError("Only one SQL statement is allowed")
 
-    if not isinstance(parsed_sql[0],sqlglot.exp.Select):
-        raise ValueError('Only SELECT queries are allowed')
+def validate_sql(query: str):
+    statements = sqlglot.parse(query, read="mysql")
+
+    if len(statements) != 1:
+        raise ValueError("Only one SQL statement is allowed.")
+
+    statement = statements[0]
+
+    if not isinstance(statement, exp.Select):
+        raise ValueError("Only SELECT queries are allowed.")
 
     return True
 
+
 @tool
-def execute_sql(query:str):
-    ''' Execute a read only SQL query and return the results '''
-    
+def execute_sql(query: str):
+    """Execute a read-only SELECT query against the Agent Forge database."""
+
     validate_sql(query)
 
     result = execute_query(query)
 
-    return result.to_json(orient = 'split')
+    return result.to_json(orient="records")

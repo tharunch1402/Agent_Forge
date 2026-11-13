@@ -1,100 +1,440 @@
+import re
+from io import StringIO
+
+import pandas as pd
+import sqlglot
 import streamlit as st
-from agentforge.services.sql_service import ask_sql_question
-from agentforge.tools.weather import get_weather
 
-st.set_page_config(page_title="Agent Forge", page_icon="🤖", layout="wide", initial_sidebar_state="collapsed")
+from agentforge.agents import build_agent
+from traffic_map import render_traffic_map
 
-st.markdown(r'''<style>
+
+# ==================================================
+# 1. PAGE CONFIGURATION
+# ==================================================
+
+st.set_page_config(
+    page_title="MultiTool AI Agent",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+
+# ==================================================
+# 2. WORKSPACE SETTINGS (one place for all agents)
+# ==================================================
+
+WORKSPACES = {
+    "sql": {
+        "icon": "🗄️",
+        "title": "SQL Agent",
+        "card_text": "Ask your database questions in plain English.",
+        "description": "Ask questions about your database.",
+        "placeholder": "Example: Find the top 5 highest-paid employees.",
+        "instruction": (
+            "The user is in the SQL Agent workspace. "
+            "Use the SQL/database tools to answer the question. "
+            "Do not use unrelated tools. "
+        ),
+    },
+    "weather": {
+        "icon": "🌤️",
+        "title": "Weather Agent",
+        "card_text": "Current weather and conditions for any city.",
+        "description": "Ask questions about weather conditions.",
+        "placeholder": "Example: What is the current weather in Bengaluru?",
+        "instruction": (
+            "The user is in the Weather Agent workspace. "
+            "Use the weather tool to answer the question. "
+            "Do not use unrelated tools. "
+        ),
+    },
+    "traffic": {
+        "icon": "🗺️",
+        "title": "Traffic Agent",
+        "card_text": "Live routes, travel times and traffic on a map.",
+        "description": "Ask for a route — the fastest one is shown on the map.",
+        "placeholder": (
+            "Example: Find the fastest route from "
+            "HSR Layout, Bengaluru to Electronic City, Bengaluru."
+        ),
+        "instruction": (
+            "The user is in the Traffic Agent workspace. "
+            "Extract the starting location and destination "
+            "from the user's natural-language question. "
+            "Use the TomTom traffic tool to calculate the route. "
+            "Do not ask the user for separate location fields. "
+        ),
+    },
+}
+
+
+# ==================================================
+# 3. CUSTOM CSS
+# ==================================================
+
+st.markdown("""
+<style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-:root{--ink:#111b55;--muted:#65708f;--purple:#7650f5;--teal:#16c7c1}
-html,body,[class*="css"]{font-family:Inter,sans-serif}
-.stApp{background:radial-gradient(ellipse at 4% 2%,rgba(210,184,255,.36),transparent 27%),radial-gradient(ellipse at 98% 4%,rgba(177,231,255,.38),transparent 25%),radial-gradient(ellipse at 0% 100%,rgba(229,211,255,.26),transparent 28%),#fffdfd;color:var(--ink)}
-[data-testid="stHeader"]{background:transparent}#MainMenu,footer{visibility:hidden}.block-container{max-width:1180px;padding-top:2.2rem;padding-bottom:3rem}
-.brand{display:flex;justify-content:center;align-items:center;gap:15px;margin:1.2rem 0 3.6rem}.brand-mark{width:76px;height:76px;border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:42px;background:linear-gradient(140deg,#7c4dff,#31b9ff);box-shadow:0 12px 30px rgba(116,75,255,.25)}.brand-name{font-size:clamp(2.3rem,5vw,4rem);line-height:1;font-weight:800;letter-spacing:-2.5px;color:#10194f}.brand-name span{background:linear-gradient(100deg,#7046ed,#9b28e8);-webkit-background-clip:text;background-clip:text;color:transparent}
-.home-intro{text-align:center;color:#69728f;font-size:1rem;margin:-2rem 0 2.1rem}.agent-card{min-height:365px;border-radius:34px;padding:2.5rem 1.5rem 1.6rem;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform .28s ease,box-shadow .28s ease,border-color .28s ease;position:relative;overflow:hidden;backdrop-filter:blur(18px)}.agent-card:before{content:"";position:absolute;inset:auto -10% -35px -10%;height:105px;border-radius:50% 50% 0 0;opacity:.72;pointer-events:none}
-.sql-card{background:linear-gradient(145deg,rgba(255,255,255,.94),rgba(244,235,255,.88));border:2px solid rgba(164,123,255,.48);box-shadow:0 16px 42px rgba(126,79,238,.12),inset 0 0 30px rgba(255,255,255,.8)}.sql-card:before{background:linear-gradient(90deg,rgba(173,139,255,.18),rgba(126,73,255,.24))}
-.weather-card{background:linear-gradient(145deg,rgba(255,255,255,.96),rgba(228,251,248,.9));border:2px solid rgba(88,218,207,.4);box-shadow:0 16px 42px rgba(41,193,183,.11),inset 0 0 30px rgba(255,255,255,.85)}.weather-card:before{background:linear-gradient(90deg,rgba(104,230,218,.18),rgba(30,196,190,.22))}
-.agent-card:hover{transform:translateY(-10px) scale(1.015)}.sql-card:hover{border-color:#9b70ff;box-shadow:0 24px 55px rgba(126,79,238,.28),0 0 24px rgba(155,112,255,.16)}.weather-card:hover{border-color:#4ed8d0;box-shadow:0 24px 55px rgba(41,193,183,.24),0 0 24px rgba(78,216,208,.16)}
-.agent-icon{width:132px;height:132px;border-radius:50%;display:flex;justify-content:center;align-items:center;font-size:66px;margin-bottom:1.1rem;transition:transform .3s ease;position:relative;z-index:1}.sql-icon{background:radial-gradient(circle,#fff 15%,#eee6ff 75%);box-shadow:0 12px 30px rgba(124,77,255,.12)}.weather-icon{background:radial-gradient(circle,#fff 10%,#e4fbfa 78%);box-shadow:0 12px 30px rgba(22,199,193,.12)}.agent-card:hover .agent-icon{transform:scale(1.08) rotate(-3deg)}.agent-title{font-size:2.1rem;font-weight:750;color:#111b55;letter-spacing:-1px;position:relative;z-index:1}.agent-description{color:#65708f;font-size:.96rem;margin-top:.45rem;position:relative;z-index:1}.card-arrow{position:absolute;right:2rem;bottom:1.6rem;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;color:white;font-size:1.8rem;z-index:2}.sql-arrow{background:linear-gradient(135deg,#b25aff,#7046ed)}.weather-arrow{background:linear-gradient(135deg,#25d7d0,#00aaa9)}
-div.stButton>button{border-radius:16px;min-height:3.1rem;font-weight:650;border:1px solid #e5e4f2;transition:transform .2s ease,box-shadow .2s ease,background .2s ease}div.stButton>button:hover{transform:translateY(-2px);box-shadow:0 9px 22px rgba(95,77,180,.14);border-color:#b9a5ff}.primary-sql div.stButton>button{background:linear-gradient(100deg,#7650f5,#a04df2);color:white;border:0}.primary-weather div.stButton>button{background:linear-gradient(100deg,#18c9c2,#12aaa9);color:white;border:0}
-.workspace-heading{font-size:2rem;font-weight:800;letter-spacing:-1px;color:#111b55;margin-bottom:.2rem}.workspace-subtitle{color:#65708f;margin-bottom:1.5rem}.result-panel{border:1px solid #e9e6f5;border-radius:18px;padding:1rem 1.2rem;background:rgba(255,255,255,.78);margin:.8rem 0}
-@media(max-width:700px){.brand{margin-bottom:2.4rem}.brand-mark{width:58px;height:58px;font-size:32px}.agent-card{min-height:280px;margin-bottom:1rem}.agent-title{font-size:1.65rem}.agent-icon{width:105px;height:105px;font-size:54px}}
-</style>''', unsafe_allow_html=True)
 
-if "page" not in st.session_state:
-    st.session_state.page = "home"
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-def go_home(): st.session_state.page = "home"
-def open_sql(): st.session_state.page = "sql"
-def open_weather(): st.session_state.page = "weather"
+.stApp { background: #F7F8FB; }
 
-def render_brand():
-    st.markdown('''<div class="brand"><div class="brand-mark">🤖</div><div class="brand-name">Agent <span>Forge</span></div></div>''', unsafe_allow_html=True)
+#MainMenu, footer, header { visibility: hidden; }
 
-def render_home():
-    render_brand()
-    st.markdown('<div class="home-intro">Choose an AI agent to get started</div>', unsafe_allow_html=True)
-    left,right=st.columns(2,gap="large")
-    with left:
-        st.markdown('''<div class="agent-card sql-card"><div class="agent-icon sql-icon">🗄️</div><div class="agent-title">SQL Agent</div><div class="agent-description">Ask questions about your database</div><div class="card-arrow sql-arrow">→</div></div>''',unsafe_allow_html=True)
-        st.markdown('<div class="primary-sql">',unsafe_allow_html=True)
-        st.button("Open SQL Agent  →",key="open_sql",on_click=open_sql,use_container_width=True)
-        st.markdown('</div>',unsafe_allow_html=True)
-    with right:
-        st.markdown('''<div class="agent-card weather-card"><div class="agent-icon weather-icon">🌤️</div><div class="agent-title">Weather Agent</div><div class="agent-description">Get current weather for any city</div><div class="card-arrow weather-arrow">→</div></div>''',unsafe_allow_html=True)
-        st.markdown('<div class="primary-weather">',unsafe_allow_html=True)
-        st.button("Open Weather Agent  →",key="open_weather",on_click=open_weather,use_container_width=True)
-        st.markdown('</div>',unsafe_allow_html=True)
+.block-container { max-width: 1100px; padding-top: 2.5rem; padding-bottom: 3rem; }
 
-def render_sql():
-    a,b=st.columns([5,1])
-    with a:
-        st.markdown('<div class="workspace-heading">🗄️ SQL Agent</div><div class="workspace-subtitle">Ask questions about your connected database in natural language.</div>',unsafe_allow_html=True)
-    with b: st.button("← Home",key="sql_home",on_click=go_home,use_container_width=True)
-    with st.form("sql_query_form"):
-        question=st.text_area("Your question",placeholder="Example: Find all employees working in the IT department",height=120)
-        submitted=st.form_submit_button("Run SQL Agent",use_container_width=True)
+/* Homepage */
+.main-title {
+    font-size: 40px; font-weight: 800; color: #1E2235;
+    text-align: center; letter-spacing: -1px; margin-bottom: 6px;
+}
+.main-subtitle {
+    text-align: center; color: #6B7085; font-size: 15px; margin-bottom: 40px;
+}
+
+/* Agent cards (Streamlit adds the class st-key-<key> to keyed containers) */
+div[class*="st-key-card_"] {
+    background: #FFFFFF;
+    border: 1px solid #E6E8EF !important; border-radius: 20px;
+    padding: 26px 24px 22px;
+    box-shadow: 0 2px 10px rgba(30, 34, 53, 0.04);
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+div[class*="st-key-card_"]:hover {
+    transform: translateY(-4px);
+    border-color: #2563EB !important;
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+}
+.card-icon {
+    width: 48px; height: 48px; border-radius: 14px; background: #EEF3FF;
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+    margin-bottom: 14px;
+}
+.card-title { font-size: 18px; font-weight: 700; color: #1E2235; margin-bottom: 4px; }
+.card-text  { font-size: 14px; color: #6B7085; line-height: 1.55; min-height: 44px; margin-bottom: 8px; }
+
+/* Blue accent for primary buttons (matches the route colour on the map) */
+button[kind^="primary"] { background: #2563EB !important; border-color: #2563EB !important; color: #fff !important; }
+button[kind^="primary"]:hover { background: #1D4ED8 !important; border-color: #1D4ED8 !important; }
+
+/* Workspace */
+.workspace-title { font-size: 28px; font-weight: 800; color: #1E2235; letter-spacing: -0.5px; }
+.workspace-description { color: #6B7085; font-size: 14px; margin-bottom: 18px; }
+
+div.stButton > button { border-radius: 10px; font-weight: 600; }
+
+div[data-testid="stForm"] {
+    background: #FFFFFF; padding: 20px;
+    border: 1px solid #E6E8EF; border-radius: 16px;
+}
+
+div[data-testid="stMetric"] { background: #FFFFFF; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ==================================================
+# 4. AGENT
+# ==================================================
+
+@st.cache_resource
+def load_agent():
+    return build_agent()
+
+
+def extract_answer(response):
+    """Return the text of the last AI message."""
+    for message in reversed(response.get("messages", [])):
+        if getattr(message, "type", None) == "ai":
+            content = message.content
+
+            if isinstance(content, str) and content.strip():
+                return content
+
+            if isinstance(content, list):
+                return "\n".join(
+                    str(item.get("text", "")) if isinstance(item, dict) else str(item)
+                    for item in content
+                )
+
+    return "The agent did not return a response."
+
+
+def ask_agent(question, workspace):
+    response = load_agent().invoke({
+        "messages": [
+            {"role": "user", "content": WORKSPACES[workspace]["instruction"] + question}
+        ]
+    })
+    return extract_answer(response)
+
+
+# ==================================================
+# 4b. SQL AGENT: answer + generated SQL + retrieved data
+# ==================================================
+
+def format_sql(query):
+    """Remove ```sql fences and lay the query out on separate lines."""
+    if not query:
+        return ""
+    query = re.sub(r"^```(?:sql)?\s*|\s*```$", "", str(query).strip(), flags=re.IGNORECASE)
+    try:
+        return sqlglot.transpile(query, read="mysql", write="mysql", pretty=True)[0]
+    except Exception:
+        return query
+
+
+def ask_sql_agent(question):
+    """Run the agent and pull out the SQL it ran, the rows it got back and its answer."""
+    response = load_agent().invoke({
+        "messages": [
+            {"role": "user", "content": WORKSPACES["sql"]["instruction"] + question}
+        ]
+    })
+
+    sql_query = None      # query sent to execute_sql (the one that actually ran)
+    checked_query = None  # query sent to the SQL checker (used if nothing was executed)
+    raw_result = None     # JSON returned by execute_sql
+
+    for message in response["messages"]:
+        for tool_call in getattr(message, "tool_calls", None) or []:
+            if tool_call["name"] == "execute_sql":
+                sql_query = tool_call["args"].get("query")
+            elif tool_call["name"] == "sql_db_query_checker":
+                checked_query = tool_call["args"].get("query")
+
+        if getattr(message, "name", None) == "execute_sql":
+            raw_result = message.content
+
+    data = None
+    if raw_result and not str(raw_result).startswith("Error"):
+        try:
+            data = pd.read_json(StringIO(raw_result), orient="split")
+        except ValueError:
+            data = None
+
+    return {
+        "question": question,
+        "answer": extract_answer(response),
+        "sql": format_sql(sql_query or checked_query),
+        "data": data,
+        "sql_error": raw_result if raw_result and str(raw_result).startswith("Error") else None,
+    }
+
+
+# ==================================================
+# 5. ORIGIN / DESTINATION FROM THE QUESTION
+# ==================================================
+
+# Stop only at ? ! ; or end of line, so "Electronic City, Bengaluru" keeps its city
+_END = r"\s*(?:[?!;\n]|$)"
+
+ROUTE_PATTERNS = [
+    rf"\bfrom\s+(?P<origin>.+?)\s+to\s+(?P<destination>.+?){_END}",
+    rf"\bbetween\s+(?P<origin>.+?)\s+and\s+(?P<destination>.+?){_END}",
+    rf"\bto\s+(?P<destination>.+?)\s+from\s+(?P<origin>.+?){_END}",
+]
+
+
+def extract_route_locations(question):
+    """
+    Supports questions like:
+      - Find the fastest route from HSR Layout, Bengaluru to Electronic City, Bengaluru.
+      - Route between Koramangala and Whitefield
+      - How long to Airport from MG Road?
+    """
+    for pattern in ROUTE_PATTERNS:
+        match = re.search(pattern, question, flags=re.IGNORECASE)
+
+        if match:
+            origin = match.group("origin").strip(" .,")
+            destination = match.group("destination").strip(" .,")
+
+            if origin and destination:
+                return origin, destination
+
+    return None, None
+
+
+# ==================================================
+# 6. SESSION STATE
+# ==================================================
+
+if "answers" not in st.session_state:
+    st.session_state.answers = {name: None for name in WORKSPACES}
+
+
+# ==================================================
+# 7. HOMEPAGE
+# ==================================================
+
+def open_workspace(name):
+    st.query_params["workspace"] = name
+
+
+def show_homepage():
+    st.markdown('<div class="main-title">MultiTool AI Agent</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="main-subtitle">One platform. Multiple specialised AI agents.</div>',
+        unsafe_allow_html=True,
+    )
+
+    columns = st.columns(len(WORKSPACES), gap="medium")
+
+    for column, (name, ws) in zip(columns, WORKSPACES.items()):
+        with column, st.container(key=f"card_{name}"):
+            st.markdown(
+                f'<div class="card-icon">{ws["icon"]}</div>'
+                f'<div class="card-title">{ws["title"]}</div>'
+                f'<div class="card-text">{ws["card_text"]}</div>',
+                unsafe_allow_html=True,
+            )
+            st.button(
+                "Open →",
+                key=f"open_{name}",
+                on_click=open_workspace,
+                args=(name,),
+                type="primary",
+                width="stretch",
+            )
+
+
+# ==================================================
+# 8. WORKSPACE
+# ==================================================
+
+def go_home():
+    st.query_params.clear()
+
+
+def show_workspace(workspace):
+    ws = WORKSPACES[workspace]
+
+    st.button("← Back", key="back_home", on_click=go_home)
+
+    st.markdown(
+        f'<div class="workspace-title">{ws["icon"]} {ws["title"]}</div>'
+        f'<div class="workspace-description">{ws["description"]}</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Question form
+    with st.form(key=f"{workspace}_form", border=False):
+        question = st.text_area(
+            "Ask your question",
+            placeholder=ws["placeholder"],
+            height=100,
+            label_visibility="collapsed",
+        )
+        submitted = st.form_submit_button("Ask Agent", type="primary", width="stretch")
+
     if submitted:
-        if not question.strip(): st.warning("Please enter a database question.")
-        else:
-            with st.spinner("Agent Forge is analyzing your question..."):
-                result=ask_sql_question(question.strip())
-            if result.get("status")=="error": st.error(result.get("error","Something went wrong."))
-            else:
-                st.success(f"Status: {result.get('status','unknown')}")
-                if result.get("final_answer"):
-                    st.markdown("### Answer")
-                    st.markdown(result["final_answer"])
-                if result.get("generated_sql"):
-                    with st.expander("Generated SQL",expanded=True): st.code(result["generated_sql"],language="sql")
-                if result.get("validation_output"):
-                    with st.expander("SQL checker output"): st.code(str(result["validation_output"]),language="sql")
-                dataframe=result.get("dataframe")
-                if dataframe is not None:
-                    st.markdown("### Query results")
-                    st.dataframe(dataframe,use_container_width=True)
-                if result.get("status")=="no_sql": st.info("This request was answered without executing a database query.")
+        handle_question(question.strip(), workspace)
 
-def render_weather():
-    a,b=st.columns([5,1])
-    with a:
-        st.markdown('<div class="workspace-heading">🌤️ Weather Agent</div><div class="workspace-subtitle">Search a city to get its current weather conditions.</div>',unsafe_allow_html=True)
-    with b: st.button("← Home",key="weather_home",on_click=go_home,use_container_width=True)
-    cities=["Hyderabad","Bengaluru","Mumbai","Delhi","Chennai","Visakhapatnam","Pune","Kolkata","Warangal","Vijayawada","Ahmedabad","Jaipur","Kochi","London","New York","Tokyo","Singapore","Dubai","Paris","Sydney"]
-    selected=st.selectbox("Search or select a city",["Choose a city..."]+cities+["Enter another city..."])
-    custom=""
-    if selected=="Enter another city...": custom=st.text_input("City name",placeholder="Type any city in the world")
-    city=custom.strip() if selected=="Enter another city..." else selected
-    with st.form("weather_form"): submitted=st.form_submit_button("Get Weather",use_container_width=True)
-    if submitted:
-        if not city or city=="Choose a city...": st.warning("Please select or enter a city.")
-        else:
-            with st.spinner(f"Fetching current weather for {city}..."):
-                result=get_weather.invoke({"city":city})
-            if result.startswith("Unable to") or "was not found" in result or "API returned an error" in result: st.error(result)
-            else:
-                st.markdown(f'''<div class="result-panel"><div style="font-size:1.05rem;color:#65708f">CURRENT WEATHER</div><div style="font-size:2rem;font-weight:800;color:#111b55;margin:.2rem 0">{city}</div><div style="white-space:pre-line;font-size:1.08rem;line-height:1.9;color:#27345f">{result}</div></div>''',unsafe_allow_html=True)
+    show_answer(workspace)
 
-if st.session_state.page=="home": render_home()
-elif st.session_state.page=="sql": render_sql()
-elif st.session_state.page=="weather": render_weather()
+
+def handle_question(question, workspace):
+    if not question:
+        st.warning("Please enter your question.")
+        return
+
+    origin = destination = None
+
+    if workspace == "traffic":
+        origin, destination = extract_route_locations(question)
+
+        if not origin or not destination:
+            st.warning(
+                "Please mention both places, e.g. "
+                "“from HSR Layout, Bengaluru to Electronic City, Bengaluru”."
+            )
+            return
+
+    if workspace == "sql":
+        try:
+            with st.spinner("Writing and running the SQL query..."):
+                st.session_state.answers["sql"] = ask_sql_agent(question)
+        except Exception as error:
+            st.error(f"Something went wrong: {error}")
+        return
+
+    try:
+        with st.spinner("Your AI agent is working..."):
+            answer = ask_agent(question, workspace)
+    except Exception as error:
+        st.error(f"Something went wrong: {error}")
+        return
+
+    st.session_state.answers[workspace] = {
+        "question": question,
+        "answer": answer,
+        "origin": origin,
+        "destination": destination,
+    }
+
+
+def show_answer(workspace):
+    result = st.session_state.answers[workspace]
+
+    if not result:
+        return
+
+    st.write("")
+
+    if workspace == "sql":
+        show_sql_answer(result)
+    elif workspace == "traffic":
+        st.markdown(f"**{result['origin']}**  →  **{result['destination']}**")
+        render_traffic_map(result["origin"], result["destination"])
+
+        with st.container(border=True):
+            st.markdown("##### 🤖 Agent summary")
+            st.markdown(result["answer"])
+    else:
+        with st.container(border=True):
+            st.caption(result["question"])
+            st.markdown(result["answer"])
+
+
+def show_sql_answer(result):
+    # 1. Answer
+    with st.container(border=True):
+        st.markdown("##### 🤖 Answer")
+        st.caption(result["question"])
+        st.markdown(result["answer"])
+
+    # 2. Generated SQL (copy button appears at the top-right of the box)
+    st.markdown("##### 🧾 Generated SQL query")
+    if result["sql"]:
+        st.code(result["sql"], language="sql")
+    else:
+        st.info("No SQL query was needed for this question.")
+
+    if result["sql_error"]:
+        st.error(result["sql_error"])
+
+    # 3. Retrieved data
+    data = result["data"]
+    if data is not None:
+        rows = len(data)
+        st.markdown(f"##### 📊 Retrieved data · {rows} row{'s' if rows != 1 else ''}")
+        if rows:
+            st.dataframe(data, hide_index=True)
+        else:
+            st.info("The query ran successfully but returned no rows.")
+
+
+# ==================================================
+# 9. ROUTING
+# ==================================================
+
+workspace = st.query_params.get("workspace")
+
+if workspace in WORKSPACES:
+    show_workspace(workspace)
+else:
+    show_homepage()
