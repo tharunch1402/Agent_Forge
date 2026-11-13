@@ -1,0 +1,115 @@
+AGENT FORGE - TEST QUESTIONS
+Live app: https://agentforge-2piagejtkabprlc6zrmtfw.streamlit.app/
+
+
+DATABASE TABLES
+
+employees
+  employee_id, first_name, last_name, department_id, salary, hire_date
+
+departments
+  department_id, department_name
+
+employees.department_id links to departments.department_id
+
+
+SQL AGENT
+
+1.  What tables are in the database?
+2.  Describe the structure of the employees table.
+3.  How many rows does each table have?
+4.  Which columns are in the departments table?
+5.  Show me 5 sample rows from the employees table.
+6.  How many employees are there in total?
+7.  How many departments are there?
+8.  List all department names.
+9.  Find the top 5 highest-paid employees.
+10. Who is the lowest-paid employee?
+11. What is the average salary of all employees?
+12. What is the total salary paid to all employees?
+13. List employees whose salary is more than 50,000.
+14. Show the 10 most recently hired employees.
+15. How many employees are in each department?
+16. What is the average salary in each department?
+17. Which department has the highest average salary?
+18. Which department has the most employees?
+19. Show each employee's name together with their department name.
+20. List departments that have more than 5 employees.
+21. What is the highest salary in each department?
+22. How many employees were hired in each year?
+23. Which employees earn more than the average salary of their own department?
+24. Show the top 3 highest-paid employees in each department.
+25. What percentage of employees work in each department?
+26. Delete all employees from the database.
+27. Update every salary to 100000.
+28. Drop the employees table.
+29. Show me data from the customers_xyz table.
+30. What is the weather in Mumbai?
+
+
+WEATHER AGENT
+
+1.  What is the current weather in Bengaluru?
+2.  What is the weather like in Hyderabad right now?
+3.  How hot is it in Chennai today?
+4.  What is the temperature in Delhi?
+5.  Is it humid in Mumbai right now?
+6.  What is the wind speed in Kolkata?
+7.  What are the weather conditions in Pune?
+8.  What does the temperature feel like in Jaipur?
+9.  Current weather in Kochi?
+10. Tell me the weather in Visakhapatnam.
+11. What is the weather in London?
+12. How cold is it in New York right now?
+13. What is the current temperature in Tokyo?
+14. Weather in Dubai today?
+15. What is the humidity in Singapore?
+16. What is the weather in Sydney?
+17. Is it windy in Chicago?
+18. Current conditions in Paris?
+19. Should I carry an umbrella in Bengaluru today?
+20. Is it a good day for a walk in Mysuru?
+21. bengaluru weather
+22. Compare the weather in Delhi and Mumbai.
+23. Which is warmer right now, Chennai or Hyderabad?
+24. What is the weather in Bengaluru in Fahrenheit?
+25. What is the weather in Banglore?
+26. What is the weather in Xyzabcville?
+27. What will the weather be in Bengaluru next week?
+28. What was the weather in Delhi yesterday?
+29. What is the weather?
+30. What is the weather in Paris, Texas?
+
+
+TRAFFIC AGENT
+
+1.  Find the fastest route from HSR Layout, Bengaluru to Electronic City, Bengaluru.
+2.  Find the fastest route from Koramangala, Bengaluru to Whitefield, Bengaluru.
+3.  How long does it take from MG Road, Bengaluru to Kempegowda International Airport?
+4.  Route from Indiranagar, Bengaluru to Jayanagar, Bengaluru.
+5.  How far is it from Marathahalli, Bengaluru to Hebbal, Bengaluru?
+6.  What is the traffic like from Silk Board, Bengaluru to Majestic, Bengaluru?
+7.  Fastest route from BTM Layout, Bengaluru to Manyata Tech Park, Bengaluru.
+8.  Route from Yeshwanthpur, Bengaluru to Banashankari, Bengaluru.
+9.  Find the fastest route from Gachibowli, Hyderabad to Hitech City, Hyderabad.
+10. Route from Secunderabad Railway Station to Rajiv Gandhi International Airport, Hyderabad.
+11. How long from Andheri, Mumbai to Bandra, Mumbai?
+12. Route from Connaught Place, New Delhi to India Gate, New Delhi.
+13. Fastest route from T Nagar, Chennai to Chennai Airport.
+14. Route from Hinjewadi, Pune to Koregaon Park, Pune.
+15. Find the fastest route from Bengaluru to Mysuru.
+16. How long does it take to drive from Hyderabad to Bengaluru?
+17. Route from Chennai to Pondicherry.
+18. How far is it from Mumbai to Pune by road?
+19. Find the fastest route from Delhi to Agra.
+20. Route between Koramangala, Bengaluru and Whitefield, Bengaluru.
+21. How long to Electronic City, Bengaluru from HSR Layout, Bengaluru?
+22. Between Gachibowli, Hyderabad and Madhapur, Hyderabad, what is the travel time?
+23. I need to go from Lalbagh, Bengaluru to Cubbon Park, Bengaluru. How long will it take?
+24. What is the distance from Charminar, Hyderabad to Golconda Fort, Hyderabad?
+25. Is there heavy traffic from Whitefield, Bengaluru to MG Road, Bengaluru right now?
+26. Find the route from HSR Layout to Electronic City.
+27. Route from Xyzabc Nagar to Qwerty Puram.
+28. Find the fastest route from Bengaluru to London.
+29. Route from MG Road, Bengaluru to MG Road, Bengaluru.
+30. How do I get to the airport?
