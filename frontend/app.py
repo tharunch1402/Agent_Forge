@@ -1,9 +1,19 @@
+import os
 import re
 from io import StringIO
 
 import pandas as pd
 import sqlglot
 import streamlit as st
+
+# Copy Streamlit Cloud secrets into environment variables
+# (must run BEFORE importing agentforge, which reads os.getenv)
+try:
+    for _key, _value in st.secrets.items():
+        if isinstance(_value, (str, int, float)):
+            os.environ.setdefault(_key, str(_value))
+except Exception:
+    pass  # No secrets file locally; the .env file is used instead
 
 from agentforge.agents import build_agent
 from traffic_map import render_traffic_map
@@ -69,6 +79,9 @@ WORKSPACES = {
     },
 }
 
+# Maximum agent steps per question (stops endless loops)
+AGENT_CONFIG = {"recursion_limit": 25}
+
 
 # ==================================================
 # 3. CUSTOM CSS
@@ -80,7 +93,40 @@ st.markdown("""
 
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-.stApp { background: #F7F8FB; }
+/* Light page for everyone, even if the visitor's system is in dark mode */
+.stApp { background: #F7F8FB; color: #1E2235; color-scheme: light; }
+
+/* Keep all normal text dark */
+.stApp [data-testid="stMarkdownContainer"] p,
+.stApp [data-testid="stMarkdownContainer"] li,
+.stApp [data-testid="stMarkdownContainer"] strong,
+.stApp [data-testid="stMarkdownContainer"] em,
+.stApp [data-testid="stMarkdownContainer"] h1,
+.stApp [data-testid="stMarkdownContainer"] h2,
+.stApp [data-testid="stMarkdownContainer"] h3,
+.stApp [data-testid="stMarkdownContainer"] h4,
+.stApp [data-testid="stMarkdownContainer"] h5,
+.stApp [data-testid="stMarkdownContainer"] h6,
+.stApp label { color: #1E2235; }
+
+.stApp [data-testid="stCaptionContainer"],
+.stApp [data-testid="stCaptionContainer"] p { color: #6B7085; }
+
+/* Question box: white background with dark text */
+.stApp textarea {
+    background: #FFFFFF !important;
+    color: #1E2235 !important;
+    border: 1px solid #E6E8EF !important;
+}
+.stApp textarea::placeholder { color: #9AA0B4 !important; }
+
+/* Spinner text ("Writing and running the SQL query...") */
+.stApp [data-testid="stSpinner"] p,
+.stApp [data-testid="stSpinner"] div { color: #1E2235; }
+
+/* Answer boxes and the data table */
+.stApp [data-testid="stVerticalBlockBorderWrapper"] { background: #FFFFFF; }
+.stApp [data-testid="stDataFrame"] { background: #FFFFFF; }
 
 #MainMenu, footer, header { visibility: hidden; }
 
@@ -118,7 +164,12 @@ div[class*="st-key-card_"]:hover {
 
 /* Blue accent for primary buttons (matches the route colour on the map) */
 button[kind^="primary"] { background: #2563EB !important; border-color: #2563EB !important; color: #fff !important; }
+button[kind^="primary"] p { color: #fff !important; }
 button[kind^="primary"]:hover { background: #1D4ED8 !important; border-color: #1D4ED8 !important; }
+
+/* Secondary buttons (e.g. "← Back") */
+button[kind^="secondary"] { background: #FFFFFF !important; color: #1E2235 !important; border: 1px solid #E6E8EF !important; }
+button[kind^="secondary"] p { color: #1E2235 !important; }
 
 /* Workspace */
 .workspace-title { font-size: 28px; font-weight: 800; color: #1E2235; letter-spacing: -0.5px; }
@@ -164,11 +215,14 @@ def extract_answer(response):
 
 
 def ask_agent(question, workspace):
-    response = load_agent().invoke({
-        "messages": [
-            {"role": "user", "content": WORKSPACES[workspace]["instruction"] + question}
-        ]
-    })
+    response = load_agent().invoke(
+        {
+            "messages": [
+                {"role": "user", "content": WORKSPACES[workspace]["instruction"] + question}
+            ]
+        },
+        config=AGENT_CONFIG,
+    )
     return extract_answer(response)
 
 
@@ -189,11 +243,14 @@ def format_sql(query):
 
 def ask_sql_agent(question):
     """Run the agent and pull out the SQL it ran, the rows it got back and its answer."""
-    response = load_agent().invoke({
-        "messages": [
-            {"role": "user", "content": WORKSPACES["sql"]["instruction"] + question}
-        ]
-    })
+    response = load_agent().invoke(
+        {
+            "messages": [
+                {"role": "user", "content": WORKSPACES["sql"]["instruction"] + question}
+            ]
+        },
+        config=AGENT_CONFIG,
+    )
 
     sql_query = None      # query sent to execute_sql (the one that actually ran)
     checked_query = None  # query sent to the SQL checker (used if nothing was executed)
