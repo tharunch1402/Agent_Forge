@@ -28,4 +28,4 @@ def execute_sql(query: str):
 
     result = execute_query(query)
 
-    return result.to_json(orient="records")
+    return result.to_json(orient="split", index=False)

@@ -213,7 +213,7 @@ def ask_sql_agent(question):
     if raw_result and not str(raw_result).startswith("Error"):
         try:
             data = pd.read_json(StringIO(raw_result), orient="split")
-        except ValueError:
+        except Exception:
             data = None
 
     return {
